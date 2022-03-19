@@ -39,11 +39,11 @@ int main() {
    * TODO: Initialize the pid variable.
    * DONE
    */
-  steering_pid.Init(1.5, 0.004, 10.0);
-  speed_pid.Init(1.0, 0.004, 2.0);
+  steering_pid.Init(2.5, 0.000, 20.0);
+  speed_pid.Init(2.0, 0.000, 5.0);
 //  speed_pid.Init(2.0, 0.004, 2.0);
 
-  const double MAX_SPEED = 50;
+  const double MAX_SPEED = 70;
   const double MAX_STEERING_ANGLE = 25;
   const double FULL_STEER_MAX_SPEED = 20;
 
@@ -99,7 +99,10 @@ int main() {
 //          double target_speed = MAX_SPEED - (MAX_SPEED - FULL_STEER_MAX_SPEED) /
 //                                                MAX_SPEED * angle_percent;
 
-          double slowdown_on_steer = (MAX_SPEED - FULL_STEER_MAX_SPEED) * abs(steer_value);
+          double steer_mag = abs(steer_value);
+          double steer_penalty = (speed > 20 && steer_mag>0.01) ? exp(steer_mag)/exp(1/steer_mag) : 0;
+
+          double slowdown_on_steer = (MAX_SPEED - FULL_STEER_MAX_SPEED) * steer_penalty;
           double target_speed = MAX_SPEED - slowdown_on_steer;
 
           double speed_error = target_speed - speed;
@@ -107,8 +110,6 @@ int main() {
           double throttle = -1 * speed_pid.TotalError();
           throttle = tanh(throttle/100) / tanh(1);
           throttle = clamp(throttle, -1, 1);
-//          double throttle = 0.3;
-//          double target_speed = MAX_SPEED;
 
 
           printf("%.17f,%.17f,%.17f,%.17f,%.17f,%.17f\n", cte, angle, speed, steer_value, target_speed, throttle);
