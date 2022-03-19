@@ -1,3 +1,41 @@
+# Overview
+
+This is my solution to the Udacity Self-Driving Car Engineer Nanodegree Program's PID control project.
+
+The solution was optimized for high speed pass in the simulator, with the car reaching over **50 mph** on the track. 
+
+Steering is controlled by a PD controller. 
+* The error input is the raw CTE
+* The steering response is adjusted to speed - lighter steering on high speeds.
+
+Throttle is also controlled by a PD controller, with the integral part disabled due to lack of bias. 
+* The error input is the CTE, with exponential impact
+* The output throttle value is normalized via tanh and set within [-1, 1] 
+
+In both PID controllers:
+* The simulator does not seem to introduce systematic bias, therefore the integral input was not necessary. (making it a PD controller)
+* High dampening (differential) value was chosen (empirically) to reduce oscillations
+* The proportional response was empirically chosen for smooth handling with safe operating limits (not going over road edge at given track)
+
+Debugging output - the output was adjusted to fit a CSV format, for fast import into visualization and analysis tools.
+
+
+## PID Controller - basic explanation
+
+The PID controller is a closed-loop controller suitable for non-linear models (i.e. models where the effect of applying the control affects the output non-linearly).
+
+Its main advantage over other controllers such as MPC are:
+1. It doesn't require us to know the model advance
+2. It allows efficient control in the presence external distrurbances, stochastic effects, non-linearities as well as bias.
+3. It is efficient to compute (and happens to be easy to implement).
+
+The P (proportional) component determines the response of the control to the error. 
+The D (differential) component is a smoothing term that takes into account previous responses to dampen osciallations.
+The I (integral) component is a cumulative error weighting that adjusts the response in the presence of systematic bias.
+
+
+# Original README below
+
 # CarND-Controls-PID
 Self-Driving Car Engineer Nanodegree Program
 
