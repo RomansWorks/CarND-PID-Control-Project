@@ -45,10 +45,10 @@ int main() {
 
   const double MAX_SPEED = 70;
   const double MAX_STEERING_ANGLE = 25;
-  const double FULL_STEER_MAX_SPEED = 20;
+  const double MIN_RECOVERY_SPEED = 10;
 
   h.onMessage([&steering_pid, &speed_pid, &MAX_SPEED, &MAX_STEERING_ANGLE,
-               &FULL_STEER_MAX_SPEED](uWS::WebSocket<uWS::SERVER> ws,
+               &MIN_RECOVERY_SPEED](uWS::WebSocket<uWS::SERVER> ws,
                                       char *data, size_t length,
                                       uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -76,34 +76,21 @@ int main() {
           // Principle - steer more gently at high speeds
 
           steering_pid.UpdateError(cte );
-          steer_value = steering_pid.TotalError() / (speed/4);
+          steer_value = steering_pid.TotalError() / (speed/1);
           steer_value = tanh(steer_value) / tanh(1);
           steer_value = clamp(steer_value, -1, 1);
 
           /* Speed */
 
           // Principle - try to reach the max speed
-          // Principle - reduce target speed when sharp steering is applied.
+          // Principle - reduce target speed when sharp steering is applied. -OR-
+          // Principle - reduce target speed when CTE is large.
 
-          // Calculate a non-linear drop in speed to apply during sharp steering
-          // target_speed peaks at MAX_SPEED and goes down with rate of steering
-          // The exp formulation drops the speed quickly on small turns.
-          // TOOD: Consider an alternative where slow down is slow for small
-          // angles and high speeds
-          //          double target_speed =
-          //          exp(-(0.03*angle_percent-log(MAX_SPEED-FULL_STEER_MAX_SPEED)))+FULL_STEER_MAX_SPEED;
+          double error_mag = abs(cte/2);
+          double penalty = (speed > 20 && error_mag>0.01) ? exp(error_mag)/exp(1/error_mag) : 0;
 
-
-          // Linear slowdown proportional to steering angle
-//          double angle_percent = abs(angle / MAX_STEERING_ANGLE) * 100;
-//          double target_speed = MAX_SPEED - (MAX_SPEED - FULL_STEER_MAX_SPEED) /
-//                                                MAX_SPEED * angle_percent;
-
-          double steer_mag = abs(steer_value);
-          double steer_penalty = (speed > 20 && steer_mag>0.01) ? exp(steer_mag)/exp(1/steer_mag) : 0;
-
-          double slowdown_on_steer = (MAX_SPEED - FULL_STEER_MAX_SPEED) * steer_penalty;
-          double target_speed = MAX_SPEED - slowdown_on_steer;
+          double slowdown = (MAX_SPEED - MIN_RECOVERY_SPEED) * penalty;
+          double target_speed = MAX_SPEED - slowdown;
 
           double speed_error = target_speed - speed;
           speed_pid.UpdateError(speed_error);
