@@ -76,17 +76,14 @@ int main() {
           // Principle - steer more gently at high speeds
 
           steering_pid.UpdateError(cte );
-//          steering_pid.UpdateError(cte * sqrt(speed));
-//          steer_value = steering_pid.TotalError() / (speed/4);  // Consider speed linearly when choosing an angle // TODO: arcsin?
-          steer_value = steering_pid.TotalError() / (speed/4);  // Consider speed linearly when choosing an angle // TODO: arcsin?
+          steer_value = steering_pid.TotalError() / (speed/4);
           steer_value = tanh(steer_value) / tanh(1);
           steer_value = clamp(steer_value, -1, 1);
 
           /* Speed */
 
-          // The problem here is that steering effects the cte via speed.
-          // TODO: Adjust steering by speed?
-          // Slows down on high angle turns
+          // Principle - try to reach the max speed
+          // Principle - reduce target speed when sharp steering is applied.
 
           // Calculate a non-linear drop in speed to apply during sharp steering
           // target_speed peaks at MAX_SPEED and goes down with rate of steering
@@ -102,16 +99,16 @@ int main() {
 //          double target_speed = MAX_SPEED - (MAX_SPEED - FULL_STEER_MAX_SPEED) /
 //                                                MAX_SPEED * angle_percent;
 
-//          double slowdown_on_steer = (MAX_SPEED - FULL_STEER_MAX_SPEED) * abs(steer_value);
-//          double target_speed = MAX_SPEED - slowdown_on_steer;
-//
-//          double speed_error = target_speed - speed;
-//          speed_pid.UpdateError(speed_error);
-//          double throttle = -1 * speed_pid.TotalError();
-//          throttle = tanh(throttle/100) / tanh(1);
-//          throttle = clamp(throttle, -1, 1);
-          double throttle = 0.3;
-          double target_speed = MAX_SPEED;
+          double slowdown_on_steer = (MAX_SPEED - FULL_STEER_MAX_SPEED) * abs(steer_value);
+          double target_speed = MAX_SPEED - slowdown_on_steer;
+
+          double speed_error = target_speed - speed;
+          speed_pid.UpdateError(speed_error);
+          double throttle = -1 * speed_pid.TotalError();
+          throttle = tanh(throttle/100) / tanh(1);
+          throttle = clamp(throttle, -1, 1);
+//          double throttle = 0.3;
+//          double target_speed = MAX_SPEED;
 
 
           printf("%.17f,%.17f,%.17f,%.17f,%.17f,%.17f\n", cte, angle, speed, steer_value, target_speed, throttle);
