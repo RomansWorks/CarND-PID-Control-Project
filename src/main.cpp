@@ -1,11 +1,12 @@
-#include <math.h>
-#include <uWS/uWS.h>
-#include <iostream>
-#include <string>
-#include "json.hpp"
 #include "PID.h"
+#include "json.hpp"
+#include <iostream>
+#include <math.h>
+#include <string>
+#include <uWS/uWS.h>
 
 // for convenience
+double clamp(double steer_value, double min, double max);
 using nlohmann::json;
 using std::string;
 
@@ -23,8 +24,7 @@ string hasData(string s) {
   auto b2 = s.find_last_of("]");
   if (found_null != string::npos) {
     return "";
-  }
-  else if (b1 != string::npos && b2 != string::npos) {
+  } else if (b1 != string::npos && b2 != string::npos) {
     return s.substr(b1, b2 - b1 + 1);
   }
   return "";
@@ -33,13 +33,24 @@ string hasData(string s) {
 int main() {
   uWS::Hub h;
 
-  PID pid;
+  PID steering_pid;
+  PID speed_pid;
   /**
    * TODO: Initialize the pid variable.
+   * DONE
    */
+  steering_pid.Init(1.5, 0.004, 10.0);
+  speed_pid.Init(1.0, 0.004, 2.0);
+//  speed_pid.Init(2.0, 0.004, 2.0);
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, 
-                     uWS::OpCode opCode) {
+  const double MAX_SPEED = 50;
+  const double MAX_STEERING_ANGLE = 25;
+  const double FULL_STEER_MAX_SPEED = 20;
+
+  h.onMessage([&steering_pid, &speed_pid, &MAX_SPEED, &MAX_STEERING_ANGLE,
+               &FULL_STEER_MAX_SPEED](uWS::WebSocket<uWS::SERVER> ws,
+                                      char *data, size_t length,
+                                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -57,37 +68,86 @@ int main() {
           double speed = std::stod(j[1]["speed"].get<string>());
           double angle = std::stod(j[1]["steering_angle"].get<string>());
           double steer_value;
-          /**
-           * TODO: Calculate steering value here, remember the steering value is
-           *   [-1, 1].
-           * NOTE: Feel free to play around with the throttle and speed.
-           *   Maybe use another PID controller to control the speed!
-           */
-          
-          // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value 
-                    << std::endl;
+
+
+          /* Steering */
+
+          // Principle - steer in proportion to cte
+          // Principle - steer more gently at high speeds
+
+          steering_pid.UpdateError(cte );
+//          steering_pid.UpdateError(cte * sqrt(speed));
+//          steer_value = steering_pid.TotalError() / (speed/4);  // Consider speed linearly when choosing an angle // TODO: arcsin?
+          steer_value = steering_pid.TotalError() / (speed/4);  // Consider speed linearly when choosing an angle // TODO: arcsin?
+          steer_value = tanh(steer_value) / tanh(1);
+          steer_value = clamp(steer_value, -1, 1);
+
+          /* Speed */
+
+          // The problem here is that steering effects the cte via speed.
+          // TODO: Adjust steering by speed?
+          // Slows down on high angle turns
+
+          // Calculate a non-linear drop in speed to apply during sharp steering
+          // target_speed peaks at MAX_SPEED and goes down with rate of steering
+          // The exp formulation drops the speed quickly on small turns.
+          // TOOD: Consider an alternative where slow down is slow for small
+          // angles and high speeds
+          //          double target_speed =
+          //          exp(-(0.03*angle_percent-log(MAX_SPEED-FULL_STEER_MAX_SPEED)))+FULL_STEER_MAX_SPEED;
+
+
+          // Linear slowdown proportional to steering angle
+//          double angle_percent = abs(angle / MAX_STEERING_ANGLE) * 100;
+//          double target_speed = MAX_SPEED - (MAX_SPEED - FULL_STEER_MAX_SPEED) /
+//                                                MAX_SPEED * angle_percent;
+
+//          double slowdown_on_steer = (MAX_SPEED - FULL_STEER_MAX_SPEED) * abs(steer_value);
+//          double target_speed = MAX_SPEED - slowdown_on_steer;
+//
+//          double speed_error = target_speed - speed;
+//          speed_pid.UpdateError(speed_error);
+//          double throttle = -1 * speed_pid.TotalError();
+//          throttle = tanh(throttle/100) / tanh(1);
+//          throttle = clamp(throttle, -1, 1);
+          double throttle = 0.3;
+          double target_speed = MAX_SPEED;
+
+
+          printf("%.17f,%.17f,%.17f,%.17f,%.17f,%.17f\n", cte, angle, speed, steer_value, target_speed, throttle);
+
+//          // DEBUG
+//          std::cout << "CTE: " << cte << " angle: " << angle
+//                    << " -- steering: " << steer_value << " Speed: " << speed
+//                    << " target: " << target_speed << " -- throttle: "
+//                    << throttle
+//                    //                    << " Speed: " << speed << " target: "
+//                    //                    << target_speed << " turn_slowdown: "
+//                    //                    << speed_down_on_turn << " --
+//                    //                    throttle: " << throttle
+//                    << std::endl;
+
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = throttle;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //          std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-        }  // end "telemetry" if
+        } // end "telemetry" if
       } else {
         // Manual driving
         string msg = "42[\"manual\",{}]";
         ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
       }
-    }  // end websocket message if
+    } // end websocket message if
   }); // end h.onMessage
 
   h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
   });
 
-  h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, 
+  h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code,
                          char *message, size_t length) {
     ws.close();
     std::cout << "Disconnected" << std::endl;
@@ -100,6 +160,15 @@ int main() {
     std::cerr << "Failed to listen to port" << std::endl;
     return -1;
   }
-  
+
   h.run();
+}
+
+
+double clamp(double val, double min = -1, double max = 1) {
+  if (val > max)
+    val = max;
+  if (val < min)
+    val = min;
+  return val;
 }
