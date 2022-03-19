@@ -43,9 +43,9 @@ int main() {
   speed_pid.Init(2.0, 0.000, 5.0);
 //  speed_pid.Init(2.0, 0.004, 2.0);
 
-  const double MAX_SPEED = 70;
+  const double MAX_SPEED = 80;
   const double MAX_STEERING_ANGLE = 25;
-  const double MIN_RECOVERY_SPEED = 10;
+  const double MIN_RECOVERY_SPEED = 30;
 
   h.onMessage([&steering_pid, &speed_pid, &MAX_SPEED, &MAX_STEERING_ANGLE,
                &MIN_RECOVERY_SPEED](uWS::WebSocket<uWS::SERVER> ws,
@@ -76,7 +76,7 @@ int main() {
           // Principle - steer more gently at high speeds
 
           steering_pid.UpdateError(cte );
-          steer_value = steering_pid.TotalError() / (speed/1);
+          steer_value = steering_pid.TotalError() / (speed*1.1);
           steer_value = tanh(steer_value) / tanh(1);
           steer_value = clamp(steer_value, -1, 1);
 
